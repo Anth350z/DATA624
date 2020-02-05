@@ -1,0 +1,230 @@
+---
+title: 'Data 624 - Homework #1'
+author: "Paul Britton"
+date: ''
+output:
+  html_document:
+    df_print: paged
+---
+
+
+Please submit exercises 2.1, 2.2, 2.3 and 2.6 from the Hyndman online Forecasting book.  Please submit both your Rpubs link as well as attach the .rmd file with your code.
+ 
+ 
+```{r}
+rm(list = ls())
+library(forecast)
+library(readxl)
+library(RCurl)
+library(fpp2)
+
+```
+
+## Question 2.1
+
+```{r}
+describe.data <- function(data) { 
+  freq <- frequency(data)
+  outlier <- which.max(data)
+  return(c(freq,outlier))
+}
+
+```
+
+### Gold
+
+```{r}
+help(gold)
+autoplot(gold)
+question1 <- describe.data(gold)
+```
+
+- The "gold" data represents the daily (morning) gold price in USD for the period 1985-01-01 to 1989-03-31.
+- The frequency of this data is `r question1[1]`.  The data is daily.
+- The outlier datapoint appears at index `r question1[2]` and corresponds to a price of `r gold[question1[2]]`
+
+
+### Wollyrnq
+
+```{r}
+help(woolyrnq)
+autoplot(woolyrnq)
+question2 <- describe.data(woolyrnq)
+```
+
+
+- The "woolyrnq" data represents the quarterly production of woolen yard (tonnes) in Australia for the period Mar-1965 to Sep-1994
+- The frequency of this data is `r question2[1]` observation per year, i.e. quarterly.
+
+### Wollyrnq
+
+```{r}
+help(gas)
+autoplot(gas)
+question3 <- describe.data(gas)
+```
+
+- The "gas" dataset shows Australian monthly gas production (units not specified) for the period 1956-1995 
+- The frequency of this data is `r question2[1]` observation per year, i.e. monthly.
+
+
+## Question 2.2
+
+### A
+
+```{r}
+
+tute1 <- read.csv("http://otexts.com/fpp2/extrafiles/tute1.csv",header=T)
+View(tute1)
+
+```
+
+### B
+
+```{r}
+
+mytimeseries <- ts(tute1[,-1], start=1981, frequency=4)
+```
+
+### C
+```{r}
+
+autoplot(mytimeseries, facets=TRUE,main="With 'Facets' Argument")
+
+autoplot(mytimeseries,main="Without 'Facets' Argument")
+
+
+```
+
+
+## Question 2.3
+
+```{r}
+
+retaildata <- readxl::read_excel("C:/Users/Paul/OneDrive - CUNY School of Professional Studies/CUNY/DATA 624/retail.xlsx", skip=1)
+
+my.ts <- ts(retaildata[,"A3349388W"],
+  frequency=12, start=c(1982,4))
+
+autoplot(my.ts)
+ggseasonplot(my.ts)
+ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+
+```
+
+For this question I just picked a column at random and ended up with "Turnover ;  Total (State) ;  Takeaway food services ;".
+
+* As per the timeseries plot, there is a clear upward sloping trend in the data and there are definately some seasonal / cyclical effects apparent
+* The seasonaly plot shows a few things:  a consistent dip in Feb, a rise towards the end of of the year. The same is present in the sub-season plot.
+* The lag plots are difficult to look at "as is" because the seasonal effects are likely weak.  I wonder whether it would make more sense to difference the timeseries before applying this plotting function
+* The ACF plot shows a high degree of auto-correlation with low decay.
+
+
+
+## Question 2.6
+
+Use the following graphics functions: autoplot(), ggseasonplot(), ggsubseriesplot(), gglagplot(), ggAcf() and explore features from the following time series: hsales, usdeaths, bricksq, sunspotarea, gasoline.
+
+Can you spot any seasonality, cyclicity and trend?
+What do you learn about the series?
+
+### hsales
+
+
+```{r}
+my.ts <- hsales
+
+autoplot(my.ts)
+ggseasonplot(my.ts)
+ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+```
+
+* As per the timeseries plot, there is no obvious trend, but it appears as though there may be some seasonality, and there absolutely appears to be some cyclicality - large long-term osscilations between 30 and 80.
+* The seasonality plots show a an uppward effect between Jan and March followed by a downward slope for the remainder of the year.  This is more apparent in the seasonality plot - the subseries plots don't work too well for this data.
+* The ACF plot show a high degree of autocorrelation for short lookbacks (1-2 periods) and appear to capture some of the seasonal pattern thereafter.
+
+### usdeaths
+
+
+```{r}
+my.ts <- usdeaths
+
+autoplot(my.ts)
+ggseasonplot(my.ts)
+ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+```
+* Once again, these data are clearly seasonal and show little trend.
+* The seasonality plots shows a dip in Feb, then a clear rise to a peak in Jul.  Thereafter, it drops off slightly and seems to flatten our towards the end of the year.
+* The lag plots are informative here also with Feb consistently appearing at the bottim and Jul, near the top.
+* The ACF almost looks like a sine wave, indicative of a pattern in the data.
+
+
+
+
+### bricksq
+
+
+```{r}
+my.ts <- bricksq
+
+autoplot(my.ts)
+ggseasonplot(my.ts)
+ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+```
+
+* This data shows an upward trend and a seemingly regular moves around that trend.
+* The seasonality plots seem to indicate that Q1 is the lowest point in there year, otherwise the data appear to be somewhat flat.
+* The ACF shows reasonably strong relationships with slow decay
+
+
+
+### sunspotarea
+
+
+```{r}
+my.ts <-  sunspotarea
+
+autoplot(my.ts)
+#ggseasonplot(my.ts)
+#ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+```
+
+* This data shows a clear cycle and no trend.
+* Given that the data is annual observations, there is no "seasonal" effect, however the cycle, which appears to be about 10 years, is quite apparent.
+* The ACF is also indicative of a cyclical pattern in that it looks like a sine wave with nadirs and peaks every 5 & 10 years, respectively.
+
+
+
+### gasoline
+
+
+```{r}
+my.ts <-  gasoline
+
+autoplot(my.ts)
+ggseasonplot(my.ts)
+#ggsubseriesplot(my.ts)
+gglagplot(my.ts)
+ggAcf(my.ts)
+
+```
+
+* This data shows a noisy up trend with apparent seasonality.
+* The seasonal plot shows a peak near weeks 0-4 and a lull for the few weeks following.  It's doesn't appear terribly strong.
+* The ACF shows a slow and cosistent decay and has an odd pattern... possibly of an annual season.
+* My gut feel is that this data might be easier to digest as Monthly or Quarterly - 
