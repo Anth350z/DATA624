@@ -1,0 +1,73 @@
+---
+title: 'Data 624 - Project 2'
+author: "Group 4"
+date: '2020-05-XX'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+---
+
+
+
+## Project 2
+
+This is role playing.  I am your new boss.  I am in charge of production at ABC Beverage and you are a team of data scientists reporting to me.  My leadership has told me that new regulations are requiring us to understand our manufacturing process, the predictive factors and be able to report to them our predictive model of PH.
+
+Please use the historical data set I am providing.  Build and report the factors in BOTH a technical and non-technical report.  I like to use Word and Excel.  Please provide your non-technical report in a  business friendly readable document and your predictions in an Excel readable format.   The technical report should show clearly the models you tested and how you selected your final approach.
+
+
+```{r, housekeeping, echo=FALSE, warning=FALSE, error=FALSE}
+#clear the workspace
+rm(list = ls())
+
+library(readxl) #excel
+library(psych)  #descriptive stats
+library(VIM)    #missing values
+library(Amelia)
+library(ggplot2)
+library(knitr)
+```
+
+### Load the Data
+
+```{r, load-data}
+
+#create a temp file
+temp_file <- tempfile(fileext = ".xlsx")
+
+#grab a copy of the xl file from github, save to temp create above
+download.file(url = "https://github.com/plb2018/DATA624/raw/master/project2/StudentData.xlsx", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+
+#load xl from temp
+df <- readxl::read_excel(temp_file,skip=0)
+
+
+```
+
+
+### Explore the Data
+
+#### Check for missing Values
+
+
+
+```{r, load-data}
+
+missmap(df)
+
+df.missing <- sort(colSums(is.na(df[!complete.cases(df),]))/nrow(df),decreasing = T)
+
+kable(df.missing)
+
+```
+
+
