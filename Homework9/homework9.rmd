@@ -15,11 +15,16 @@ theme: lumen
 
 
 Exercises 8.1,8.2,8.3 & 8.7  from the K&J book. 
-The rpubs version of this work can be found [here](8), and source/data can be found on github [here](https://github.com/plb2018/DATA624/tree/master/Homework8).
+The rpubs version of this work can be found [here](https://rpubs.com/plb_lttfer/605076), and source/data can be found on github [here](https://github.com/plb2018/DATA624/tree/master/Homework9).
  
 ```{r}
 library(knitr)
+library(ggplot2)
+library(tidyr)
+library(AppliedPredictiveModeling)
+library(partykit)
 
+data(solubility)
 ```
  
  
@@ -52,26 +57,129 @@ kable(rfImp1)
 
 ```
 
-No, the random forest model does not use $V6-V10$ to any significant degree as we can clearly see from the table above.  The average score for $V1-V5$ = `r mean(rfImp1[1:5,1])` whereas the average score for $V6-V10$ is mean(rfImp1[6:10,1]).
+No, the random forest model does not use $V6-V10$ to any significant degree as we can clearly see from the table above.  The average score for $V1-V5$ = `r mean(rfImp1[1:5,1])` whereas the average score for $V6-V10$ is `r mean(rfImp1[6:10,1])`.
 
 
 
 ### b) Now add an additional predictor that is highly correlated with one of the informative predictors. For example:
 
-```
-> simulated$duplicate1 <- simulated$V1 + rnorm(200) * .1
-> cor(simulated$duplicate1, simulated$V1)
+```{r}
+simulated$duplicate1 <- simulated$V1 + rnorm(200) * .1
+cor(simulated$duplicate1, simulated$V1)
 ```
 Fit another random forest model to these data. Did the importance score
 for V1 change? What happens when you add another predictor that is
 also highly correlated with V1?
 
+```{r}
+model2 <- randomForest(y ~ ., 
+                       data = simulated,
+                       importance = TRUE,
+                       ntree = 1000)
+
+rfImp2 <- varImp(model2, scale = FALSE)
+
+kable(rfImp2)
+```
+The weight of $V1$ is now split between $V1$ and" $duplicate1$
+
 ### c) Use the cforest function in the party package to fit a random forest model using conditional inference trees. The party package function varimp can calculate predictor importance. The conditional argument of that function toggles between the traditional importance measure and the modified version described in Strobl et al. (2007). Do these importances show the same pattern as the traditional random forest model?
+
+```{r}
+library(party)
+library(dplyr)
+
+cforestModel <- cforest(y ~ ., data=simulated)
+
+
+
+vi <- cbind(rfImp2,
+            varimp(cforestModel) %>% sort(decreasing = T),
+            varimp(cforestModel, conditional=T) %>% sort(decreasing = T))
+
+colnames(vi) <- c("Traditional","Unconditional","Conditional")
+
+vi <- data.frame(vi)
+
+
+kable(vi)
+vi$vars <- row.names(vi)
+
+
+vi.tidy <- gather(vi,"condition","value",-vars)
+
+ggplot(vi.tidy,aes(x=vars,y=value, fill = condition,color=condition))+
+  geom_bar(stat="identity",position="dodge")+
+  ggtitle("Variable Importance by Model")
+
+```
+
+Whereas the traditional model (green) shows a relatively high degree of importance for the the duplicate variable, the cforest model does not.  Otherwise, variable importance is somewhat similar with the only other glaring difference being the the traditional model underweights V3 with respect to the other 2 models.  All seem to equally ignore $V6-V10$ 
+
 
 ### d) Repeat this process with different tree models, such as boosted trees and Cubist. Does the same pattern occur?
 
+```{r}
+library(Cubist)
+library(gbm)
+
+model.cubist <- cubist(x=simulated[,-(ncol(simulated)-1)], 
+                      y=simulated$y,committees=10)
+
+model.gbm <- gbm(y ~ ., data=simulated,n.trees=50, distribution='gaussian')
+gbm.summary <- summary(model.gbm)
+
+varImp(model.cubist)
+
+vi <- cbind(vi,varImp(model.cubist),gbm.summary[2])
+vi <- data.frame(vi)
+vi <- subset(vi, select = -c(vars))
+
+colnames(vi) <- c("Traditional","Unconditional","Conditional","Cubist","GBM")
+
+kable(vi)
+vi$vars <- row.names(vi)
+
+vi.tidy <- gather(vi,"condition","value",-vars)
+
+ggplot(vi.tidy,aes(x=vars,y=value, fill = condition,color=condition))+
+  geom_bar(stat="identity",position="dodge")+
+  ggtitle("Variable Importance by Model")
+
+```
+
+As previously, the traditional model is the only one that assigns any weight to the duplicate variable.  The GBM model appears to assign weights in relatively similar places as the models previously tested whereas the Cubist model assigns some importances to $V6$ and $V7$.  I did some messing around with it and re-created this result several times - I am wondering whether this is a model feature, or operator error.  
 
 ## 8.2 Use a simulation to show tree bias with different granularities.
+
+```{r}
+set.seed(19)
+
+a <- sample.int(5 , 500, replace = TRUE)/5
+b <- sample.int(10, 500, replace = TRUE)/10
+c <- sample.int(25, 500, replace = TRUE)/25
+d <- sample.int(50, 500, replace = TRUE)/50
+e <- sample.int(100, 500, replace = TRUE)/100
+
+target <- a + e * rnorm(500)
+
+df <- data.frame(a, b, c, d, e, target)
+str(df)
+
+library(rpart)
+library(rpart.plot)
+
+model.rpart <- rpart(target ~ ., data=df)
+kable(varImp(model.rpart))
+rpart.plot(model.rpart)
+```
+
+In the above, first we generate a set of 5 random variables with differning granularity.  We create a target variable as a linear combination of the smallest and largest granularity, multiplied by a noise factor.
+
+We then train the model and can clearly see in the varImp table that variable "E" is considerably more important than variable a.  The r-part plot is a little bit more cryptic and I think that perhapse, in hindsight, I should have considered using fewer variables.
+
+
+
 
 ## 8.3 In stochastic gradient boosting the bagging fraction and learning rate will govern the construction of the trees as they are guided by the gradient.
 
@@ -83,12 +191,233 @@ for the bagging fraction (0.1 and 0.9) and the learning rate (0.1 and 0.9) for
 the solubility data. The left-hand plot has both parameters set to 0.1, and
 the right-hand plot has both set to 0.9:
 
+![Fig 8.24.](https://raw.githubusercontent.com/plb2018/DATA624/master/Homework9/fig824.PNG)
+
 ### a) Why does the model on the right focus its importance on just the first few of predictors, whereas the model on the left spreads importance across more predictors?
+
+In the context of bagging fraction and learning rate:
+
+The learning rate governs the faction of the current prediction value added to the previous prediction and a value of <0.01 is suggested by the text.  The bagging fraction determines the proportion of the training data seen by the model - the book suggests 50%.
+
+* The model on the right has a higher learning rate and this is closer to optimal.  There are more variables with lower weight because this model effectively "knows" more about the data.  It will, however, have taken significantly longer to generate such a model.
+* The model on the right was also trained with a higher bagging fraction (more data) which should further reduce the importance of marginal variables
+*The model on the left is less optimized, and on a smaller portion of the data.  It does not have enough information to reduce variable importance in the same way as the model on the right. 
+
 ### b) Which model do you think would be more predictive of other samples?
-### c) How would increasing interaction depth affec the slope of predictor importance for either model in Fig. 8.24?
+
+We would expect the performance of the model on the right to be better on analagous data sets due to it's level of tuning.  However, It will likely also be more sensitive differences in the outsample data.
+
+Which model I would chose would depend on the application (consequences of being wrong etc...).  Where accuracy is not overly important, but robustness matters a lot, the model on the left is preferred, otherwise, the better tuned model on the right.
+
+
+### c) How would increasing interaction depth affect the slope of predictor importance for either model in Fig. 8.24?
+
+```{r}
+
+g1 <- expand.grid(n.trees=100, interaction.depth=1, shrinkage=0.1, n.minobsinnode=10)
+g2 <- expand.grid(n.trees=100, interaction.depth=10, shrinkage=0.1,n.minobsinnode=10)
+
+model.gbm1 <- train(x = solTrainXtrans, y = solTrainY, method = 'gbm', tuneGrid = g1, verbose = FALSE)
+
+ 
+model.gbm2 <- train(x = solTrainXtrans, y = solTrainY, method = 'gbm', tuneGrid = g2, verbose = FALSE)
+
+
+var.imp <- cbind(varImp(model.gbm1)[[1]],varImp(model.gbm2)[[1]])
+
+colnames(var.imp) <- c("Depth1", "Depth10")
+
+
+kable(var.imp[order(-var.imp$Depth1),][1:25,])
+
+```
+
+As we can see above, increasing the interaction depth flattens the slope and gives weights to far more variables, further out.
 
 ## 8.7 Refer to Exercises 6.3 and 7.5 which describe a chemical manufacturing process. Use the same data imputation, data splitting, and pre-processing steps as before and train several tree-based models:
 
+
+First we'll load and split the data by recycling code from HW7 & 8.  
+
+```{r}
+set.seed(19)
+data(ChemicalManufacturingProcess)
+
+chem <- ChemicalManufacturingProcess
+
+#impute using knn
+chem.imp <- preProcess(chem[,2:ncol(chem)], method=c('knnImpute'))
+chem <- cbind(chem$Yield,predict(chem.imp, chem[,2:ncol(chem)]))
+colnames(chem)[1] <- "Yield"
+
+#split 70/30
+n <-  floor(0.70 * nrow(chem))
+idx <- sample(seq_len(nrow(chem)), size = n)
+train <- chem[idx, ]
+test <- chem[-idx, ]
+
+```
+
+Next we train, analyze and compare several models:
+
+```{r}
+
+# train all the models
+
+
+grid.rf <- expand.grid(mtry=seq(5,40,by=5))
+model.rf <- train(Yield ~.,
+                  data = train, 
+                  method = "rf",
+                  tuneGrid = grid.rf,
+                  metric = "Rsquared",
+                  importance = TRUE,
+                  trControl = trainControl(method = "cv", number = 10))
+
+
+grid.crf <- expand.grid(mtry=seq(5,50,by=5))
+model.crf <- train(Yield ~.,
+                  data = train, 
+                  method = "cforest",
+                  tuneGrid = grid.crf,
+                  metric = "Rsquared",
+                  trControl = trainControl(method = "oob"))
+
+
+grid.cube <- expand.grid(committees = c(1,5,10,15,20,25), 
+                         neighbors = c(0,1,3,4,5))
+
+model.cube <- train(Yield ~.,
+                   data = train, 
+                   method = "cubist", 
+                   metric = "Rsquared",
+                   tuneGrid = grid.cube, 
+                   trControl = trainControl(method = "cv", number = 10))
+
+
+grid.rpart <- expand.grid(maxdepth= seq(1,10,by=1))
+
+model.rpart <- train(Yield ~.,
+                     data = train,
+                     method = "rpart2",
+                     metric = "Rsquared", 
+                     tuneGrid = grid.rpart,
+                     trControl = trainControl(method = "cv", number = 10))
+
+
+grid.gbm <- expand.grid(n.trees=c(50, 100, 150, 200), 
+                    interaction.depth=c(1, 5, 10, 15), 
+                    shrinkage=c(0.01, 0.1, 0.5), 
+                    n.minobsinnode=c(5, 10, 15))
+
+model.gbm <- train(Yield ~.,
+                  data = train, 
+                  method = 'gbm', 
+                  tuneGrid = grid.gbm , 
+                  verbose = FALSE)
+
+
+```
+
+
+
+```{r}
+
+pred.rf <- predict(model.rf,  newdata = test[,-1])
+pred.crf <- predict(model.crf,  newdata = test[,-1])
+pred.cube <-  predict(model.cube,  newdata = test[,-1])
+pred.rpart <-  predict(model.rpart,  newdata = test[,-1])
+pred.gbm <-  predict(model.gbm,  newdata = test[,-1])
+
+
+
+
+```
+
+```{r}
+
+train.results <- data.frame(rbind(getTrainPerf(model.rf),
+                                  getTrainPerf(model.crf),
+                                  getTrainPerf(model.cube),
+                                  getTrainPerf(model.rpart),
+                                  getTrainPerf(model.gbm)))
+
+row.names(train.results) <- c("RandomForest", "cForest","Cubeist","Rpart","GBM")
+
+train.results 
+
+
+test.results <- data.frame(rbind(postResample(pred = pred.rf, obs = test$Yield),
+                        postResample(pred = pred.crf, obs = test$Yield),
+                        postResample(pred = pred.cube, obs = test$Yield),
+                        postResample(pred = pred.rpart, obs = test$Yield),
+                        postResample(pred = pred.gbm, obs = test$Yield)))
+
+row.names(test.results) <- c("RandomForest", "cForest","Cubeist","Rpart","GBM")
+
+test.results
+```
+
+
+
+
+
 ### a) Which tree-based regression model gives the optimal resampling and test set performance?
+
+From the above tables we can see that the best model in both training and testing was the Cubist model.
+
+
 ### b) Which predictors are most important in the optimal tree-based regression model? Do either the biological or process variables dominate the list? How do the top 10 important predictors compare to the top 10 predictors from the optimal linear and nonlinear models?
+
+```{r}
+plot(varImp(model.cube), 
+     top=10, 
+     scales = list(y = list(cex = 0.8)),
+     main="Variable Importance for Cubist")
+
+plot(varImp(model.rf), 
+     top=10, scales = list(y = list(cex = 0.8)),
+     main="Variable Importance for RandomForest")
+
+plot(varImp(model.crf), 
+     top=10, scales = list(y = list(cex = 0.8)),
+     main="Variable Importance for cForest")
+
+
+plot(varImp(model.rpart), 
+     top=10, scales = list(y = list(cex = 0.8)),
+     main="Variable Importance for Rpart")
+
+plot(varImp(model.gbm),
+     top=10, scales = list(y = list(cex = 0.8)),
+     main="Variable Importance for GBM")
+
+
+
+var.imp <- data.frame(cbind(varImp(model.cube)[[1]],
+                            varImp(model.rf)[[1]],
+                            varImp(model.crf)[[1]],
+                            varImp(model.rpart)[[1]],
+                            varImp(model.gbm)[[1]]))
+
+colnames(var.imp) <- c("Cubist","RandomForest", "cForest","Rpart","GBM")
+
+kable(var.imp[1:10,])
+```
+
+From the above, we can see that the most important variable in the best model is mfp32 with the top 10 being dominated by manufacturing, in general.  While all other models (except Rpart) show mfp32 as the top variable in terms of importance, there seems to be less of a bias towards manufacturing process variables in all the other models.  Just by eye, the other models appear to be about 50/50, Mfg/Bio whereas the Cubist model is 80% Mfg.
+
 ### c) Plot the optimal single tree with the distribution of yield in the terminal nodes. Does this view of the data provide additional knowledge about the biological or process predictors and their relationship with yield?
+
+```{r}
+
+plot(as.party(model.rpart$finalModel),gp=gpar(fontsize=11))
+
+```
+
+I could not find any way to plot the optimal model (cubist), however, given that they are all reasonably similar, I chose to plot rpart using "party", which is relatively simple.
+
+It appears as though the top of the tree (i.e. the big decisions) are governed by manufacturing - we see this in variable importance.  It's not incredibly clear, but based on the terminal distributions it appeas as though bio processes may be associated with lower yield outcomes, in general.
+
+
+
